@@ -144,6 +144,32 @@ func TestAccAWSSecurityGroup_ingressWithCidrAndSGs(t *testing.T) {
 	})
 }
 
+// This test requires an EC2 Classic region
+func TestAccAWSSecurityGroup_ingressWithCidrAndSGs_classic(t *testing.T) {
+	var group ec2.SecurityGroup
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckAWSSecurityGroupDestroy,
+		Steps: []resource.TestStep{
+			resource.TestStep{
+				Config: testAccAWSSecurityGroupConfig_ingressWithCidrAndSGs_classic,
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAWSSecurityGroupExists("aws_security_group.web", &group),
+					testAccCheckAWSSecurityGroupSGandCidrAttributes(&group),
+					resource.TestCheckResourceAttr(
+						"aws_security_group.web", "name", "terraform_acceptance_test_example"),
+					resource.TestCheckResourceAttr(
+						"aws_security_group.web", "description", "Used in the terraform acceptance tests"),
+					resource.TestCheckResourceAttr(
+						"aws_security_group.web", "ingress.#", "2"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccAWSSecurityGroup_namePrefix(t *testing.T) {
 	var group ec2.SecurityGroup
 
@@ -768,6 +794,48 @@ resource "aws_security_group" "web" {
     from_port   = 80
     to_port     = 8000
     cidr_blocks = ["10.0.0.0/8"]
+  }
+
+  tags {
+    Name = "tf-acc-test"
+  }
+}
+`
+
+const testAccAWSSecurityGroupConfig_ingressWithCidrAndSGs_classic = `
+provider "aws" {
+	region = "us-east-1"
+}
+
+resource "aws_security_group" "other_web" {
+  name        = "tf_other_acc_tests"
+  description = "Used in the terraform acceptance tests"
+
+  tags {
+    Name = "tf-acc-test"
+  }
+}
+
+resource "aws_security_group" "web" {
+  name        = "terraform_acceptance_test_example"
+  description = "Used in the terraform acceptance tests"
+
+  ingress {
+    protocol  = "tcp"
+    from_port = "22"
+    to_port   = "22"
+
+    cidr_blocks = [
+      "192.168.0.1/32",
+    ]
+  }
+
+  ingress {
+    protocol        = "tcp"
+    from_port       = 80
+    to_port         = 8000
+    cidr_blocks     = ["10.0.0.0/8"]
+    security_groups = ["${aws_security_group.other_web.name}"]
   }
 
   tags {
