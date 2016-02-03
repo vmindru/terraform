@@ -277,8 +277,13 @@ func resourceAwsSecurityGroupRead(d *schema.ResourceData, meta interface{}) erro
 
 	sg := sgRaw.(*ec2.SecurityGroup)
 
-	ingressRules := resourceAwsSecurityGroupIPPermGather(d.Id(), sg.IpPermissions)
-	egressRules := resourceAwsSecurityGroupIPPermGather(d.Id(), sg.IpPermissionsEgress)
+	var useVpc bool
+	if sg.VpcId != nil && *sg.VpcId != "" {
+		useVpc = true
+	}
+
+	ingressRules := resourceAwsSecurityGroupIPPermGather(d.Id(), sg.IpPermissions, useVpc)
+	egressRules := resourceAwsSecurityGroupIPPermGather(d.Id(), sg.IpPermissionsEgress, useVpc)
 
 	d.Set("description", sg.Description)
 	d.Set("name", sg.GroupName)
@@ -400,7 +405,7 @@ func resourceAwsSecurityGroupRuleHash(v interface{}) int {
 	return hashcode.String(buf.String())
 }
 
-func resourceAwsSecurityGroupIPPermGather(groupId string, permissions []*ec2.IpPermission) []map[string]interface{} {
+func resourceAwsSecurityGroupIPPermGather(groupId string, permissions []*ec2.IpPermission, useVpc bool) []map[string]interface{} {
 	ruleMap := make(map[string]map[string]interface{})
 	for _, perm := range permissions {
 		var fromPort, toPort int64
@@ -438,7 +443,7 @@ func resourceAwsSecurityGroupIPPermGather(groupId string, permissions []*ec2.IpP
 
 		var groups []string
 		if len(perm.UserIdGroupPairs) > 0 {
-			groups = flattenSecurityGroups(perm.UserIdGroupPairs)
+			groups = flattenSecurityGroups(perm.UserIdGroupPairs, useVpc)
 		}
 		for i, id := range groups {
 			if id == groupId {
